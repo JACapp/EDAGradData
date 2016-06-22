@@ -1,0 +1,1879 @@
+---
+title: "Demographic Factors that Influence High School Graduation Rates"
+author: "Jo Anna Capp, PhD"
+date: "March 30, 2016"
+output: html_document
+---
+========================================================
+
+```{r global_options, include=FALSE} 
+knitr::opts_chunk$set(fig.width=15, fig.height=10, fig.path='Figs/', 
+                      echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+
+
+```{r echo=FALSE, include=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+
+install.packages('plyr', repos = 'http://cran.us.r-project.org')
+install.packages('dplyr', repos = 'http://cran.us.r-project.org')
+install.packages("ggplot2", repos = 'http://cran.us.r-project.org')
+install.packages("gridExtra", repos = 'http://cran.us.r-project.org')
+install.packages('rmarkdown', repos = 'http://cran.us.r-project.org')
+install.packages('pastecs', repos = 'http://cran.us.r-project.org')
+install.packages('reshape2', repos = 'http://cran.us.r-project.org')
+install.packages('formatR', repos = 'http://cran.us.r-project.org')
+install.packages('choroplethr', repos = 'http://cran.us.r-project.org')
+install.packages('choroplethrMaps', repos = 'http://cran.us.r-project.org')
+install.packages('Hmisc', repos = 'http://cran.us.r-project.org')
+install.packages('corrplot', repos = 'http://cran.us.r-project.org')
+install.packages('pheatmap', repos = 'http://cran.us.r-project.org')
+install.packages('gplots', repos = 'http://cran.us.r-project.org')
+install.packages('ggExtra',repos = 'http://cran.us.r-project.org') 
+
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(rmarkdown)
+library(pastecs)
+library(reshape2)
+library(formatR)
+library(choroplethr)
+library(choroplethrMaps)
+library(Hmisc)
+library(corrplot)
+library(pheatmap)   
+library(gplots)
+library(ggExtra)
+
+```
+# Introduction
+The AT&T Data for Diplomas initiative is a hackathon posted on [Devpost](http://datafordiplomas.devpost.com/). The goal of the hackathon was to identify factors that contributed to high school graduation rates, in an effort to increase graduation rates to 90% by 2020.  I am performing an exploratory data analysis on the data provided for that hackathon.  It is a combined dataset including Federal high school graduation data and demographics, American Community Survey (ACS) data, and 2010 US Census Data. Although I didn't enter the hackaton, the fact that I was brought up in a rural area with a low graduation rate makes me very interested in actionable ways that we can increase the success of American high school students.
+
+# Data Summary and Wrangling
+
+```{r include=FALSE, message=FALSE, warning=FALSE, error=FALSE, Load_the_Data}
+# Load the Data
+getwd()
+setwd('D:/Documents/Udacity/EDA_with_R/DataForDiplomas/Data for Diplomas_Merged Data/Merged Data')
+gradData.All <- read.csv('GRADUATION_WITH_CENSUS.csv')
+
+#general overview of the data
+dim(gradData.All)
+str(head(gradData.All, 10))
+#names(gradData.All)
+#summary(gradData.All)
+
+
+
+```
+
+This is a large dataset, containing 9907 observations of 580 variables. The data schema for the entire dataset is included as part of the files for this project. The dataset combines the graduation data for each school district with the demographic data for the census tracts that overlap geospatially with the school district. For this data analysis, I want to focus on several areas that I believe may effect high school graduation rates:    
+Ethnicities of the high school cohort  
+Population of disabled students in the highschool cohort  
+Geographic variables (state, county)  
+Primary language spoken in the home, if English is not spoken "very well"  
+Population density  
+Poverty level  
+Employment/Unemployment rate  
+Education level of those over age 25  
+Age distribution of the population  
+Ethnicities of the population  
+
+Looking at the data schema, I notice that there is both population data and percentage data. For example, the Hispanic population data has a variable field for both percent of population and number of poeple per census track.  I will focus my efforts on understanding the percentage variables for the fields of interest listed above.  
+
+I want to trim the data in order to exclude variables that have a high number of NA values.  I realize that I could impute these values from the other data provided, but since I have such a large number of variables to choose to look at, I will only consider those with a small number of NA values. The summary() function contains a count of NA values for each variable. I can use this to weed out previously identified variables of interest that have incomplete data.  
+
+After looking at the data schema and structure of the data, I've reduced the dataset I will be considering to 75 variables (prior to further wrangling) with 9907 observations.   
+
+However, 40 of those variables are language specific variables: the percent of the population that speaks a specific language in the houshold, if English is not spoken "very well".  According to [this link](https://www.census.gov/prod/2013pubs/acs-22.pdf) from the census bureau, only a handful of languages other than English are spoken by a significant number of people.  I will only consider the top five non-English languages in this analysis, and combine the others into a new variable.  The languages I will consider individually are: Spanish, Chinese, Tagalog, Vietnamese, and French.
+
+```{r echo=FALSE, include=FALSE, Subset_Data}
+#create a subset of interesting variables
+gradData <- gradData.All[, c("ALL_COHORT_1112", "ALL_RATE_1112", 
+                             "MAM_RATE_1112", "MAS_RATE_1112",
+                             "MBL_RATE_1112", "MHI_RATE_1112", "MTR_RATE_1112",
+                             "MWH_RATE_1112", "CWD_RATE_1112", "ECD_RATE_1112",
+                             "State", "County", "Tot_Population_ACS_08_12",
+                             "pct_Pop_Under_5_ACS_08_12", 
+                             "pct_Pop_5_17_ACS_08_12",
+                             "pct_Pop_18_24_ACS_08_12",
+                             "pct_Pop_25_44_ACS_08_12",
+                             "pct_Pop_45_64_ACS_08_12",
+                             "pct_Pop_65plus_ACS_08_12",
+                             "pct_Hispanic_ACS_08_12",
+                             "pct_NH_White_alone_ACS_08_12",
+                             "pct_NH_Blk_alone_ACS_08_12",
+                             "pct_NH_AIAN_alone_ACS_08_12",
+                             "pct_NH_Asian_alone_ACS_08_12",
+                             "pct_NH_NHOPI_alone_ACS_08_12",
+                             "pct_NH_SOR_alone_ACS_08_12",
+                             "pct_Age5p_Only_Eng_ACS_08_12",
+                             "pct_Othr_Lang_ACS_08_12",
+                             "pct_Age5p_Spanish_ACS_08_12", 
+                             "pct_Age5p_French_ACS_08_12",
+                             "pct_Age5p_FrCreole_ACS_08_12",
+                             "pct_Age5p_Italian_ACS_08_12",
+                             "pct_Age5p_Portugues_ACS_08_12",
+                             "pct_Age5p_German_ACS_08_12",
+                             "pct_Age5p_Yiddish_ACS_08_12",
+                             "pct_Age5p_WGerman_ACS_08_12",
+                             "pct_Age5p_Scandinav_ACS_08_12",
+                             "pct_Age5p_Greek_ACS_08_12",
+                             "pct_Age5p_Russian_ACS_08_12", 
+                             "pct_Age5p_Polish_ACS_08_12",
+                             "pct_Age5p_SRBCroati_ACS_08_12",
+                             "pct_Age5p_OthSlavic_ACS_08_12",
+                             "pct_Age5p_Armenian_ACS_08_12",
+                             "pct_Age5p_Persian_ACS_08_12",
+                             "pct_Age5p_Gujarati_ACS_08_12",
+                             "pct_Age5p_Hindi_ACS_08_12",
+                             "pct_Age5p_Urdu_ACS_08_12", 
+                             "pct_Age5p_OthIndic_ACS_08_12",
+                             "pct_Age5p_OthEuro_ACS_08_12", 
+                             "pct_Age5p_Chinese_ACS_08_12",
+                             "pct_Age5p_Japanese_ACS_08_12", 
+                             "pct_Age5p_Korean_ACS_08_12",
+                             "pct_Age5p_Cambodian_ACS_08_12",
+                             "pct_Age5p_Hmong_ACS_08_12",
+                             "pct_Age5p_Thai_ACS_08_12",
+                             "pct_Age5p_Laotian_ACS_08_12",
+                             "pct_Age5p_Vietnames_ACS_08_12", 
+                             "pct_Age5p_OthAsian_ACS_08_12",
+                             "pct_Age5p_Tagalog_ACS_08_12", 
+                             "pct_Age5p_OthPacIsl_ACS_08_12",
+                             "pct_Age5p_Navajo_ACS_08_12", 
+                             "pct_Age5p_NativeNAm_ACS_08_12",
+                             "pct_Age5p_Hungarian_ACS_08_12", 
+                             "pct_Age5p_Arabic_ACS_08_12",
+                             "pct_Age5p_Hebrew_ACS_08_12", 
+                             "pct_Age5p_African_ACS_08_12",
+                             "pct_Age5p_OthUnSp_ACS_08_12", 
+                             "pct_Pop_25yrs_Over_ACS_08_12",
+                             "pct_Not_HS_Grad_ACS_08_12",
+                             "pct_College_ACS_08_12", 
+                             "pct_Prs_Blw_Pov_Lev_ACS_08_12",
+                             "pct_Civ_unemp_16p_ACS_08_12", 
+                             "pct_Civ_unemp_16_24_ACS_08_12",
+                             "pct_Civ_unemp_25_44_ACS_08_12",
+                             "pct_Civ_unemp_45_64_ACS_08_12", 
+                             "pct_Civ_unemp_65p_ACS_08_12")]
+
+#Create a new variable to aggregate minor languages spoken into one variable.
+gradData$pct_OtherMinorLang <- with(gradData, pct_Age5p_FrCreole_ACS_08_12 +
+                             pct_Age5p_Italian_ACS_08_12 +
+                             pct_Age5p_Portugues_ACS_08_12 + 
+                             pct_Age5p_German_ACS_08_12 +
+                             pct_Age5p_Yiddish_ACS_08_12 + 
+                             pct_Age5p_WGerman_ACS_08_12 +
+                             pct_Age5p_Scandinav_ACS_08_12 + 
+                             pct_Age5p_Greek_ACS_08_12 +
+                             pct_Age5p_Russian_ACS_08_12 +
+                             pct_Age5p_Polish_ACS_08_12 +
+                             pct_Age5p_SRBCroati_ACS_08_12 +
+                             pct_Age5p_OthSlavic_ACS_08_12 +
+                             pct_Age5p_Armenian_ACS_08_12 +
+                             pct_Age5p_Persian_ACS_08_12 +
+                             pct_Age5p_Gujarati_ACS_08_12 +
+                             pct_Age5p_Hindi_ACS_08_12 +
+                             pct_Age5p_Urdu_ACS_08_12 +
+                             pct_Age5p_OthIndic_ACS_08_12 +
+                             pct_Age5p_OthEuro_ACS_08_12 +
+                             pct_Age5p_Japanese_ACS_08_12 + 
+                             pct_Age5p_Korean_ACS_08_12 +
+                             pct_Age5p_Cambodian_ACS_08_12 +
+                             pct_Age5p_Hmong_ACS_08_12 +
+                             pct_Age5p_Thai_ACS_08_12 + 
+                             pct_Age5p_Laotian_ACS_08_12 +
+                             pct_Age5p_OthAsian_ACS_08_12 +
+                             pct_Age5p_OthPacIsl_ACS_08_12 +
+                             pct_Age5p_Navajo_ACS_08_12 + 
+                             pct_Age5p_NativeNAm_ACS_08_12 +
+                             pct_Age5p_Hungarian_ACS_08_12 + 
+                             pct_Age5p_Arabic_ACS_08_12 +
+                             pct_Age5p_Hebrew_ACS_08_12 + 
+                             pct_Age5p_African_ACS_08_12 +
+                             pct_Age5p_OthUnSp_ACS_08_12)
+
+gradDataTrun <- gradData[, c("ALL_COHORT_1112", "ALL_RATE_1112", 
+                             "MAM_RATE_1112", "MAS_RATE_1112",
+                             "MBL_RATE_1112", "MHI_RATE_1112", "MTR_RATE_1112",
+                             "MWH_RATE_1112", "CWD_RATE_1112", "ECD_RATE_1112",
+                             "State", "County", "Tot_Population_ACS_08_12",
+                             "pct_Pop_Under_5_ACS_08_12", 
+                             "pct_Pop_5_17_ACS_08_12",
+                             "pct_Pop_18_24_ACS_08_12",
+                             "pct_Pop_25_44_ACS_08_12",
+                             "pct_Pop_45_64_ACS_08_12",
+                             "pct_Pop_65plus_ACS_08_12",
+                             "pct_Hispanic_ACS_08_12",
+                             "pct_NH_White_alone_ACS_08_12",
+                             "pct_NH_Blk_alone_ACS_08_12",
+                             "pct_NH_AIAN_alone_ACS_08_12",
+                             "pct_NH_Asian_alone_ACS_08_12",
+                             "pct_NH_NHOPI_alone_ACS_08_12",
+                             "pct_NH_SOR_alone_ACS_08_12",
+                             "pct_Age5p_Only_Eng_ACS_08_12",
+                             "pct_Othr_Lang_ACS_08_12", 
+                             "pct_Age5p_Spanish_ACS_08_12", 
+                             "pct_Age5p_French_ACS_08_12", 
+                             "pct_Age5p_Chinese_ACS_08_12",
+                             "pct_Age5p_Vietnames_ACS_08_12", 
+                             "pct_Age5p_Tagalog_ACS_08_12", 
+                             "pct_OtherMinorLang",
+                             "pct_Pop_25yrs_Over_ACS_08_12",
+                             "pct_Not_HS_Grad_ACS_08_12",
+                             "pct_College_ACS_08_12", 
+                             "pct_Prs_Blw_Pov_Lev_ACS_08_12",
+                             "pct_Civ_unemp_16p_ACS_08_12", 
+                             "pct_Civ_unemp_16_24_ACS_08_12",
+                             "pct_Civ_unemp_25_44_ACS_08_12",
+                             "pct_Civ_unemp_45_64_ACS_08_12", 
+                             "pct_Civ_unemp_65p_ACS_08_12")]
+
+```
+
+Another round of cleaning has to occur with the graduation data obtained from the DOE. For the variables "MAM_RATE_1112", "MAS_RATE_1112", "MBL_RATE_1112", "MHI_RATE_1112", "MTR_RATE_1112", "MWH_RATE_1112", "CWD_RATE_1112", "ECD_RATE_1112", the graduation rates are reported in a series of non-uniform bins. They are factor variables with a large number (>50) of levels. For example, for the percentage of white students in a graduation cohort (MWH_RATE_1112), the structure of the variable is:  
+
+```{r echo=FALSE, Example_Binning}
+str(gradData$MWH_RATE_1112)
+
+```
+
+I will need to convert these factor variables to numeric variables using a mapping in order to facilitate downstream analysis. Since the reporting of this graduation data is inconsistent, with some districts reporting a discrete percentage of graduates, and others reporting a range, I will choose the largest numerical range that is consistent across all variables in  this data. In this case, I will bin the data in the following percentages: 0-19%, 20-39%, 40-59%, 60-79%, 80-100%. I can then convert the factor variable to numeric variables, with each number (1-5) representing a quintile. In summary, a reported cohort graduation rate of 73% would be represented as 4 - because it falls within the fourth quintile. Likewise, a reported graduation rate of 20-29% would be converted to the numeral 2 - because it falls within the second quintile. Note: Categories levels GE50, GE90, LE20, LE5, LT50, and PS will be excluded from the analysis and converted to NA in this mapping.  These designations are DOE designations used to protect the identity of students. For example,the PS level is used if there are five or less students in a graduation cohort meeting the criteria of the variable. Thus, I deem this data incomplete and will exclude it from the analysis.  
+
+```{r echo=FALSE, Cohort_Data_Conversion}
+
+#determine the levels of the factor variable MAM_RATE_1112
+#summary(gradData$MAM_RATE_1112)
+#create the mapping for MAM_RATE_1112
+gradData$MAM_quint <- revalue(gradData$MAM_RATE_1112, 
+                              c("20-24"=2, "20-29"=2, "21-39"=2, "25-29"=2,
+                                "30-34"=2, "30-39"=2, "35-39"=2, "40-44"=3, 
+                                "40-49"=3, "40-59"=3, "45-49"=3, "49"=3, 
+                                "50-54"=3, "50-59"=3, "55-59"=3, "60-64"=4,
+                                "60-69"=4, "60-79"=4, "65-69"=4, "67"=4,
+                                "70-74"=4,"70-79"=4, "71"=4, "75-79"=5, 
+                                "80-84"=5, "80-89"=5, "81"=5, "85-89"=5, 
+                                "90-94"=5, "GE50"="", "GE80"="", "GE90"="",
+                                "LE20"="", "LE5"="", "LT50"="", "PS"=""))
+
+#convert factor variable to numeric
+gradData$MAM_quint <- as.numeric(as.character(gradData$MAM_quint))
+#summary(gradData$MAM_quint)
+
+#determine the levels of the factor variable MAS_RATE_1112
+#summary(gradData$MAS_RATE_1112)
+
+#create the mapping for MAS_RATE_1112
+gradData$MAS_quint <- revalue(gradData$MAS_RATE_1112, 
+                              c("21-39"=2, "40-44"=3, "40-59"=3, "45-49"=3, 
+                                "50-54"=3, "50-59"=3, "53"=3, "55-59"=3, 
+                                "60-64"=4, "60-69"=4, "60-79"=4, "65-69"=4,
+                                "67"=4, "70"=4,  "70-74"=4,"70-79"=4,
+                                "75"=4, "75-79"=5, "76"=4, "77"=4, "78"=4,
+                                "80"=5, "80-84"=5, "80-89"=5, "81"=5, "82"=5,
+                                "83"=5, "84"=5, "85"=5, "85-89"=5, "86"=5,
+                                "87"=5, "88"=5, "89"=5, "90"=5, "90-94"=5,
+                                "91"=5, "92"=5,"93"=5,"94"=5, "95"=5,
+                                "96"=5, "97"=5, "98"=5,  "GE50"="", "GE80"="",
+                                "GE90"="","GE95"="","GE99"="", "LT50"="", 
+                                "PS"=""))
+
+gradData$MAS_quint <- as.numeric(as.character(gradData$MAS_quint))
+#summary(gradData$MAS_quint)
+
+#summary(gradData$MBL_RATE_1112)
+#create the mapping for MAM_RATE_1112
+gradData$MBL_quint <- revalue(gradData$MBL_RATE_1112, 
+                              c("7"=1, "14"=1, "15-19"=1, "21-39"=2, "25-29"=2,
+                                "30-39"=2, "37"=2, "40-44"=3, "40-49"=3, 
+                                "40-59"=3, "41"=3, "43"=3, "45-49"=3, "46"=3,
+                                "48"=3, "49"=3, "50"=3, "50-54"=3, "50-59"=3,
+                                "51"=3, "52"=3,"53"=3, "54"=3, "55"=3, 
+                                "55-59"=3, "56"=3, "57"=3, "58"=3, "59"=3, 
+                                "60"=4, "60-64"=4, "60-69"=4, "60-79"=4,
+                                "61"=4, "62"=4, "63"=4, "64"=4, "65"=4, 
+                                "65-69"=4, "66"=4, "67"=4, "68"=4, "69"=4, 
+                                "70"=4,  "70-74"=4,"70-79"=4, "71"=4, "72"=4, 
+                                "73"=4, "74"=4, "75"=4, "75-79"=5, "76"=4, 
+                                "77"=4, "78"=4, "79"=4, "80"=5, "80-84"=5,
+                                "80-89"=5, "81"=5, "82"=5,"83"=5,"84"=5,"85"=5,
+                                "85-89"=5, "86"=5, "87"=5, "88"=5, "89"=5, 
+                                "90"=5, "90-94"=5, "91"=5, "92"=5,"93"=5, 
+                                "94"=5,"95"=5, "GE50"="", "GE80"="", "GE90"="",
+                                "GE95"="", "LE20"="", "LT50"="", "PS"=""))
+
+gradData$MBL_quint <- as.numeric(as.character(gradData$MBL_quint))
+#summary(gradData$MBL_quint)
+
+#summary(gradData$MHI_RATE_1112)
+#create the mapping for MHI_RATE_1112
+gradData$MHI_quint <- revalue(gradData$MHI_RATE_1112, 
+                              c("10-14"=1, "20-29"=2, "21-39"=2, "30-34"=2, 
+                                "30-39"=2, "35-39"=2, "37"=2, "39"=2, "40"=3,
+                                "40-44"=3, "40-49"=3, "40-59"=3, "43"=3, 
+                                "44"=3, "45"=3, "47"=3, "45-49"=3, "48"=3,
+                                "50"=3, "50-54"=3, "50-59"=3, "51"=3, "52"=3,
+                                "53"=3, "54"=3, "55"=3, "55-59"=3, "56"=3,
+                                "57"=3, "58"=3, "59"=3,"60"=4, "60-64"=4, 
+                                "60-69"=4, "60-79"=4, "61"=4, "62"=4, "63"=4,
+                                "64"=4, "65"=4, "65-69"=4, "66"=4, "67"=4, 
+                                "68"=4, "69"=4, "70"=4,  "70-74"=4,"70-79"=4,
+                                "71"=4, "72"=4, "73"=4, "74"=4, "75"=4, 
+                                "75-79"=5, "76"=4, "77"=4, "78"=4, "79"=4, 
+                                "80"=5, "80-84"=5, "80-89"=5, "81"=5, "82"=5,
+                                "83"=5,"84"=5,"85"=5, "85-89"=5, "86"=5,
+                                "87"=5, "88"=5, "89"=5, "90"=5, "90-94"=5, 
+                                "91"=5, "92"=5,"93"=5,"94"=5,"95"=5, "96"=5, 
+                                "97"=5, "GE50"="", "GE80"="", "GE90"="", 
+                                "GE95"="", "LE10"="", "LE20"="", "LT50"="", 
+                                "PS"=""))
+
+gradData$MHI_quint <- as.numeric(as.character(gradData$MHI_quint))
+#summary(gradData$MHI_quint)
+
+#summary(gradData$MTR_RATE_1112)
+#create the mapping for MTR_RATE_1112
+gradData$MTR_quint <- revalue(gradData$MTR_RATE_1112, 
+                              c("18"=1, "21-39"=2,"40-49"=3, "40-59"=3, 
+                                "45-49"=3,"50-54"=3, "50-59"=3, "60-64"=4, 
+                                "60-69"=4, "60-79"=4,"65-69"=4,"69"=4,
+                                "70-74"=4,"70-79"=4, "75"=4, "75-79"=5, "79"=4,
+                                "80-84"=5, "80-89"=5, "81"=5, "85-89"=5,
+                                "90-94"=5, "91"=5, "GE50"="", "GE80"="", 
+                                "GE90"="","GE95"="", "LT50"="", "PS"=""))
+
+gradData$MTR_quint <- as.numeric(as.character(gradData$MTR_quint))
+#summary(gradData$MTR_quint)
+
+#summary(gradData$MWH_RATE_1112)
+#create the mapping for MAM_RATE_1112
+gradData$MWH_quint <- revalue(gradData$MWH_RATE_1112, 
+                              c("15-19"=1, "20-29"=2, "21-39"=2, "23"=2, 
+                                "25-29"=2, "30-34"=2, "30-39"=2, "35-39"=2,
+                                "36"=2, "40-44"=3, "40-49"=3, "40-59"=3, 
+                                "45-49"=3, "49"=3, "50-54"=3, "50-59"=3,
+                                "51"=3, "55-59"=3, "56"=3, "58"=3, "59"=3,
+                                "60-64"=4, "60-69"=4, "60-79"=4, "61"=4, 
+                                "62"=4, "63"=4, "64"=4, "65"=4, "65-69"=4,
+                                "66"=4, "67"=4, "68"=4, "69"=4, "70"=4, 
+                                "70-74"=4,"70-79"=4, "71"=4, "72"=4, "73"=4,
+                                "74"=4, "75"=4, "75-79"=5, "76"=4, "77"=4, 
+                                "78"=4, "79"=4, "80"=5, "80-84"=5, "80-89"=5,
+                                "81"=5, "82"=5,"83"=5, "84"=5,"85"=5, 
+                                "85-89"=5, "86"=5, "87"=5, "88"=5, "89"=5,
+                                "90"=5, "90-94"=5, "91"=5, "92"=5, "93"=5, 
+                                "94"=5,"95"=5, "96"=5,"97"=5,"98"=5, "GE50"="",
+                                "GE80"="", "GE90"="", "GE95"="", "GE99"="",
+                                "LE10"="", "LE20"="", "LT50"="", "PS"=""))
+
+gradData$MWH_quint <- as.numeric(as.character(gradData$MWH_quint))
+#summary(gradData$MWH_quint)
+
+#summary(gradData$CWD_RATE_1112)
+#create the mapping for CWD_RATE_1112
+gradData$CWD_quint <- revalue(gradData$CWD_RATE_1112, 
+                              c("11-19"=1, "14"=1, "15-19"=1, "19"=1,"20-24"=2,
+                                "20-29"=2, "21-39"=2,  "22"=2, "23"=2, "24"=2,
+                                "25"=2,  "25-29"=2, "27"=2, "29"=2, "30"=2, 
+                                "30-34"=2, "30-39"=2, "33"=2, "34"=2, 
+                                "35-39"=2, "36"=2, "37"=2, "38"=2, "40-44"=3,
+                                "40-49"=3, "40-59"=3, "41"=3, "42"=3, "43"=3,
+                                "44"=3, "45"=3, "45-49"=3, "46"=3, "47"=3, 
+                                "48"=3, "50"=3, "49"=3, "50-54"=3, "50-59"=3,
+                                "51"=3, "52"=3, "53"=3, "54"=3, "55"=3, 
+                                "55-59"=3, "56"=3, "57"=3, "58"=3, "59"=3, 
+                                "60"=4, "60-64"=4, "60-69"=4, "60-79"=4, 
+                                "61"=4, "62"=4, "63"=4, "64"=4, "65"=4, 
+                                "65-69"=4, "66"=4, "67"=4, "68"=4, "69"=4,
+                                "70"=4,  "70-74"=4,"70-79"=4, "71"=4, "73"=4, 
+                                "74"=4, "75"=4, "75-79"=5, "76"=4, "77"=4, 
+                                "78"=4, "79"=4, "80"=5, "80-84"=5, "80-89"=5, 
+                                "82"=5, "85-89"=5, "86"=5, "87"=5, "90"=5, 
+                                "90-94"=5, "91"=5, "93"=5, "GE50"="", 
+                                "GE80"="", "GE90"="", "GE95"="", "LE10"="",
+                                "LE20"="", "LT50"="", "PS"=""))
+
+gradData$CWD_quint <- as.numeric(as.character(gradData$CWD_quint))
+#summary(gradData$CWD_quint)
+
+#summary(gradData$ECD_RATE_1112)
+#create the mapping for ECD_RATE_1112
+gradData$ECD_quint <- revalue(gradData$ECD_RATE_1112, 
+                              c("6-9"=1, "10-14"=1, "11-19"=1, "15"=1,
+                                "15-19"=1, "20-24"=2, "20-29"=2, "21"=2,
+                                "21-39"=2, "25-29"=2, "30-34"=2, "30-39"=2, 
+                                "33"=2, "35-39"=2, "38"=2, "40"=3, "40-44"=3,
+                                "40-49"=3, "40-59"=3, "42"=3, "44"=3, "45"=3,
+                                "45-49"=3, "46"=3, "47"=3, "48"=3, "50"=3, 
+                                "49"=3, "50-54"=3, "50-59"=3, "51"=3, "52"=3,
+                                "53"=3, "54"=3, "55"=3, "55-59"=3, "56"=3,
+                                "57"=3, "58"=3, "59"=3, "60"=4, "60-64"=4,
+                                "60-69"=4, "60-79"=4, "61"=4, "62"=4, "63"=4,
+                                "64"=4, "65"=4, "65-69"=4, "66"=4, "67"=4, 
+                                "68"=4, "69"=4, "70"=4,  "70-74"=4,"70-79"=4,
+                                "71"=4, "72"=4, "73"=4, "74"=4, "75"=4, 
+                                "75-79"=5, "76"=4, "77"=4, "78"=4, "79"=4,
+                                "80"=5, "80-84"=5, "80-89"=5, "81"=5, "82"=5,
+                                "83"=5, "84"=5,"85"=5, "85-89"=5, "86"=5, 
+                                "87"=5, "88"=5,"89"=5, "90"=5, "90-94"=5,
+                                "91"=5, "92"=5, "93"=5, "94"=5, "95"=5, "96"=5,
+                                "GE50"="", "GE80"="", "GE90"="","GE95"="", 
+                                "LE5"="", "LE20"="", "LT50"="", "PS"=""))
+
+gradData$ECD_quint <- as.numeric(as.character(gradData$ECD_quint))
+#summary(gradData$ECD_quint)
+
+```
+
+It is worth noting that a considerable loss of information occurs when the graduation rate for special populations is binned into quintiles. This, however, cannot be helped due to inconsistent reporting of graduation rates in these populations.  
+
+#Exploratory Data Analysis:
+
+## Graduation Data
+
+First I want to look at the graduation rates of all students:
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, All_Gr}
+
+allDataGrad.plot <- ggplot(data = subset(gradData, !is.na(ALL_RATE_1112)), 
+                      aes(x = ALL_RATE_1112)) +
+                    geom_histogram(binwidth=1) +
+                    xlab("graduation rate")
+
+allDataGradLog.plot <- ggplot(data = subset(gradData, !is.na(ALL_RATE_1112)),
+                         aes(x = ALL_RATE_1112)) +
+                    geom_histogram(binwidth = 0.01) +
+                    scale_x_log10() +
+                    scale_y_log10() +
+                    xlab("graduation rate (log10)")
+
+grid.arrange(allDataGrad.plot, allDataGradLog.plot)
+
+summary(gradData$ALL_RATE_1112)
+
+ggplot(data = subset(gradData, !is.na(ALL_RATE_1112)), 
+       aes(x = ALL_RATE_1112)) +
+       geom_histogram(binwidth=1) +
+       xlim(0, 50) + ylim(0, 20) +
+       xlab("graduation rate")
+
+```
+
+This first plot is the reported graduation rate for all school districts for all students.  This is not a normal distribution. It is very negatively skewed. This is evident both from the plots and from the stat summary. The quartiles are very close together. I tried various transformations of the x and y axis to see if I can spot trends in the data. The transformations didn't provide me with much more information.  However, I do notice distince spikes in the data. I wonder what is causing them?  A large number of schools report 50%, 80%, 82%, 84%, 87%, 90%, 92%, and 95% graduation rates.  There are also graduation rates well below 50%. These are concerning. I wonder what could cause such low graduation rates. When I look at total graduation rates from 0-50%, there are much fewer of them, but again, they seem to be reported in discrete intervals.  Perhaps when the different states report graduation rates they round to some common percentage?  The variation in state reporting methods may very well account for these spikes. This is something to look at during the multivariate analysis. I chose to view this data as a histogram instead of a box plot because of these spikes: in a box plot they would not have been evident. Histograms are better at visualizing large variances in the observed frequencies of in the dataset.  
+
+Next I want to look at how the graduation rate differs with ethnicity:  
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, Eth}
+
+MAM_grad.plot <- ggplot(data = subset(gradData, !is.na(MAM_quint)), 
+                   aes(x = MAM_quint)) +
+                   geom_histogram(binwidth=1) +
+                   xlab("native american graduation rate")
+
+MAS_grad.plot <- ggplot(data = subset(gradData, !is.na(MAS_quint)), 
+                   aes(x = MAS_quint)) +
+                   geom_histogram(binwidth=1) +
+                   xlab("asian graduation rate")
+
+MBL_grad.plot <- ggplot(data = subset(gradData, !is.na(MBL_quint)), 
+                   aes(x = MBL_quint)) +
+                   geom_histogram(binwidth=1) +
+                   xlab("black graduation rate")
+
+MHI_grad.plot <- ggplot(data = subset(gradData, !is.na(MHI_quint)), 
+                   aes(x = MHI_quint)) +
+                   geom_histogram(binwidth=1) +
+                   xlab("hispanic graduation rate")
+
+MTR_grad.plot <- ggplot(data = subset(gradData, !is.na(MTR_quint)),
+                   aes(x = MTR_quint)) +
+                   geom_histogram(binwidth=1) +
+                   xlab("biracial graduation rate")
+
+MWH_grad.plot <- ggplot(data = subset(gradData, !is.na(MWH_quint)), 
+                   aes(x = MWH_quint)) +
+                   geom_histogram(binwidth=1) +
+                   xlab("white graduation rate")
+
+grid.arrange(MAM_grad.plot, MAS_grad.plot, MBL_grad.plot,
+             MHI_grad.plot, MTR_grad.plot, MWH_grad.plot)
+
+```
+
+There is wide variances both in the number of observations of graduation rates of students of different ethnicities, as well as the actual graduation rates.  I expect that many schools did not report graduation rates for Native Americans (MAM) since many schools may have a low percentile of Native Americans in the graduating cohort.  Conversely, there are a large number of schools reporting graduation rates for whites (MWH) - they are the dominant race in the United States.  A boxplot may better visualize differences in graduation rates between the cohorts.  
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, EthBox}
+
+par(mfrow=c(2,3))
+boxplot(gradData$MAM_quint,xlab="native american Grad Rate")
+boxplot(gradData$MAS_quint, xlab="asian Grad Rate")
+boxplot(gradData$MBL_quint,xlab="black Grad Rate")
+boxplot(gradData$MHI_quint,xlab="hispanic Grad Rate")
+boxplot(gradData$MTR_quint,xlab="biracial Grad Rate")
+boxplot(gradData$MWH_quint,xlab="white Grad Rate")
+
+rates <- cbind(gradData$MAM_quint, gradData$MAS_quint, gradData$MBL_quint, 
+               gradData$MHI_quint, gradData$MTR_quint, gradData$MWH_quint)
+
+summary(rates)
+
+```
+
+The box plots show that Native Americans (V1 in the summary) have the lowest mean gradiation rate, and the largest difference in minimum and maximum graduation rates, with no suspected outliers.  The white cohort (V6 in the summary) has the highest mean graduation rate, but with significant suspected outliers. The mean and quartiles of the other four variables are between these two extremes.  What are some demographic reasons for the difference in graduation rates between races? Language spoken in the home may influence graduation rates in the cohort identifying as Hispanic.  Otherwise I hypothesize that demographic variables such as poverty level, employment status, and eductaion level of the population influence graduation rates. These are areas to look at during the bi/multi-variate analysis.  
+
+The other two statistics I want to consider from the graduation data are percentage of children with disabilities graduating within 4 years, and the percentage of children from economically disadvantaged households graduating within four years.  
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, cwdpop}
+
+par(mfrow=c(1,3))
+boxplot(gradData$ALL_RATE_1112,xlab="All Students Grad Rate")
+boxplot(gradData$CWD_quint, xlab="Disabled students Grad Rate")
+boxplot(gradData$ECD_quint,xlab="Economically disadvantaged Grad Rate")
+
+rates <- cbind(gradData$CWD_quint, gradData$ECD_quint)
+summary(rates)
+
+```
+
+Note: the graduation rate for all students was not binned into quintiles.  This data is used for a visual comparison only. The mean graduation rate of students with disabilities(CWD) (V1 in summary) is lower than the graduation rate of any special population except Native Americans and Blacks.  And, the students from economically disadvantaged households(ECD) graduate at a lower rate than all students in total. Interesting, the distribution of frequencies in these two data sets is flipped: the CWD distribution is negatively skewed, while the ECD distribution is positively skewed. There is also a large variance in the CWD graduation rates. This is interesting, and it indicates that some school districts have high graduation rates of ECD and CWD students. It will be interesting to see what the demographics of the school districts are.  
+
+I'd like to look at the distributions of these variables as well to see if there are significant differences not shown by box plots.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, SpecPop_His}
+
+CWD_grad.plot <- ggplot(data = subset(gradData, !is.na(CWD_quint)), 
+                   aes(x = CWD_quint), xlab = "disabled students Grad Rate") +
+                   geom_histogram(binwidth=1)
+
+ECD_grad.plot <- ggplot(data = subset(gradData, !is.na(ECD_quint)), 
+                   aes(x = ECD_quint), xlab = "economically disadvantaged Grad Rate") +
+                   geom_histogram(binwidth=1)
+
+grid.arrange(CWD_grad.plot, ECD_grad.plot, ncol=2)
+
+```
+
+In summary, the univariate analysis of the graduation data shows that the graduation rates of Native Americans, students with disabilities, Blacks, and economically disadvantaged students show the most potential for improvement. It is worth noting that these populations are not mutually exclusive, and their relationships will be explored in the next section. Before continuing, however, I would like to look at the demographics of the US population as a whole to provide a baseline for comparison of special populations during the bi/multivariate analysis.  
+
+## Census Data
+
+I am interested in exploring the population by age, race, launguage use, education level (of those over age 25), poverty level, and unemployment.  These variables from the ACS data have been merged with the graduation data so the data is present for each school district in the country.  
+
+First I'll look at how the US population varies with age.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, CenAge}
+
+#create a new dataframe with basic grad data and population data
+gradData.Pop <- melt(gradData, id.vars = "ALL_RATE_1112", 
+                     measure.vars = c("pct_Pop_Under_5_ACS_08_12", 
+                                      "pct_Pop_5_17_ACS_08_12",
+                                      "pct_Pop_18_24_ACS_08_12", 
+                                      "pct_Pop_25_44_ACS_08_12",
+                                      "pct_Pop_45_64_ACS_08_12", 
+                                      "pct_Pop_65plus_ACS_08_12"))
+
+gradData.Pop <- subset(gradData.Pop, !is.na(gradData.Pop$value))
+#str(gradData.Pop)
+
+ggplot(data = gradData.Pop, aes(gradData.Pop$value, 
+                                colour = gradData.Pop$variable)) +
+         geom_freqpoly() +
+         xlim(0, 50) +
+         xlab("percent of population") +
+         ggtitle("Population percent by age in census tracts")
+
+summary(cbind(gradData$pct_Pop_Under_5_ACS_08_12, 
+              gradData$pct_Pop_5_17_ACS_08_12, 
+              gradData$pct_Pop_18_24_ACS_08_12, 
+              gradData$pct_Pop_25_44_ACS_08_12,
+              gradData$pct_Pop_45_64_ACS_08_12, 
+              gradData$pct_Pop_65plus_ACS_08_12))
+
+```
+
+This plot shows the age distribution of the population of all census tracts correlated with a school district. All 6 population bins are roughly normally distributed (see plot and summary statistics), and the baby boomer population is easily recognized as the largest population in the US (blue on plot, V5) with a mean of 28.26% of the population in census tracts. It will be interesting to see how population distribution correlates with highschool graduation rates. Note: while this (and following) plots are not true univariate plots, I've chosen to cobine the plots and include it in the univariate section because I am only looking at one demographic variable in these plots. The census data just bins these variables.  
+
+Now I want to look at how the US populationis distributed by race:
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, Race}
+#reshape data to compare variables
+gradData.Race <- melt(gradData, id.vars = "ALL_RATE_1112", 
+                     measure.vars = c("pct_Hispanic_ACS_08_12", 
+                                      "pct_NH_White_alone_ACS_08_12",
+                                       "pct_NH_Blk_alone_ACS_08_12", 
+                                      "pct_NH_AIAN_alone_ACS_08_12",
+                                      "pct_NH_Asian_alone_ACS_08_12", 
+                                      "pct_NH_NHOPI_alone_ACS_08_12",
+                                      "pct_NH_SOR_alone_ACS_08_12"))
+
+gradData.Race <- subset(gradData.Race, !is.na(gradData.Race$value))
+#str(gradData.Race)
+
+ggplot(data = gradData.Race, aes(x = gradData.Race$variable, 
+                                 y = gradData.Race$value, 
+                                 fill = gradData.Race$variable)) +
+         geom_jitter(alpha = 0.25, colour = "grey") +
+         geom_boxplot() +
+         scale_y_log10() +
+         theme(axis.text.x  = element_text(angle=90, vjust=0.5, size=10)) +
+         ylab("percent of population (log10)") +
+         xlab("racial group") +
+         ggtitle("Percent of people identifying with specific racial groups")
+
+summary(cbind(gradData$pct_Hispanic_ACS_08_12, 
+              gradData$pct_NH_White_alone_ACS_08_12, 
+              gradData$pct_NH_Blk_alone_ACS_08_12, 
+              gradData$pct_NH_AIAN_alone_ACS_08_12,
+              gradData$pct_NH_Asian_alone_ACS_08_12, 
+              gradData$pct_NH_NHOPI_alone_ACS_08_12,
+              gradData$pct_NH_SOR_alone_ACS_08_12))
+
+```
+
+A boxplot with the y-values transformed on the log10 scale was the most informative method of plotting this data. Note: the data is plotted in grey behind the summary boxplots for each variable. In the majority of census tracts Whites make up most of the population. (Mean = 79.99% in each tract,V2), while those identifying as native Hawaiian or Pacific Islander only make up on average 0.06% in each census tract (V5). Interestingly, there are some census tracts that trend heavily non-white, Hispanic, Black, Native American (AIAN), and Asian, indicated by the summary statistics and seen on the box plot.  It will be interesting to look at the graduation rates of these outlier school districts.  Common perception is that school districts that are a high percentage non-white tend to be low performing. I wonder if the data will actually support this hypothesis. I would suspect that there are other factors instead of/in addition to race that also effect graduation rates.  
+
+Another factor that may influence graduation rates is language spoken in the home. What is the distribution of languages in the United States?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, Lang}
+#reshape data to compare variables
+gradData.Lang <- melt(gradData, id.vars = "ALL_RATE_1112", 
+                     measure.vars = c("pct_Age5p_Only_Eng_ACS_08_12",
+                                      "pct_Othr_Lang_ACS_08_12",
+                                      "pct_Age5p_Spanish_ACS_08_12",
+                                      "pct_Age5p_Chinese_ACS_08_12", 
+                                      "pct_Age5p_Tagalog_ACS_08_12",
+                                      "pct_Age5p_Vietnames_ACS_08_12", 
+                                      "pct_Age5p_French_ACS_08_12",
+                                      "pct_OtherMinorLang"))
+
+gradData.Lang <- subset(gradData.Lang, !is.na(gradData.Lang$value))
+#str(gradData.Lang)
+
+ggplot(data = gradData.Lang, aes(x = gradData.Lang$variable, 
+                                 y = gradData.Lang$value, 
+                                 fill = gradData.Lang$variable)) +
+         geom_jitter(alpha = 0.25, colour = "grey") +       
+         geom_boxplot() +
+         scale_y_log10() +
+         theme(axis.text.x  = element_text(angle=90, vjust=0.5, size=10)) +
+         ylab("percent of population (log10)") +
+         xlab("primary language spoken") +
+         ggtitle("Primary Language of people over age 5 in census tract")
+
+ggplot(data = gradData.Lang, aes(x = gradData.Lang$value, 
+                                 colour = gradData.Lang$variable)) +
+         geom_freqpoly() +
+         scale_x_log10() +
+         scale_y_sqrt() +
+         xlab("primary language spoken") +
+         ggtitle("Primary Language of people over age 5 in census tract")
+
+summary(cbind(gradData$pct_Age5p_Only_Eng_ACS_08_12, 
+              gradData$pct_Age5p_Spanish_ACS_08_12, 
+              gradData$pct_Age5p_Chinese_ACS_08_12, 
+              gradData$pct_Age5p_Tagalog_ACS_08_12,
+              gradData$pct_Age5p_Vietnames_ACS_08_12, 
+              gradData$pct_Age5p_French_ACS_08_12,
+              gradData$pct_OtherLang))
+
+```
+
+The boxplot and frequency polygon show that English is the primary language for the majority (mean = 89%) of Americans in each census tract. However,we can see that in some census tracts up to 71% of people over the age of five speak a language other than the six major languages in the US (pct_OtherLang, V7).  Obviously,there is great diversity of languages spoken in each census tract, and it may correlate with the graduation rates. Again, outlier analysis may be interesting.
+
+Since I am looking at graduation rates, what is the education level of the US population?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, Edu}
+#reshape data to compare variables
+gradData.Edu <- melt(gradData, id.vars = "ALL_RATE_1112", 
+                     measure.vars = c("pct_Not_HS_Grad_ACS_08_12", 
+                                      "pct_College_ACS_08_12"))
+
+gradData.Edu <- subset(gradData.Edu, !is.na(gradData.Edu$value))
+#str(gradData.Edu)
+
+ggplot(data = gradData.Edu, aes(x = gradData.Edu$variable, 
+                                y = gradData.Edu$value, 
+                                fill = gradData.Edu$variable)) +
+         geom_jitter(alpha = 0.25, colour = "grey") +
+         geom_boxplot() +
+         theme(axis.text.x  = element_text(angle=90, vjust=0.5, size=10)) +
+         ylab("percent of population (log10)") +
+         xlab("education level") +
+         ggtitle("Education level of population over age 25")
+
+ggplot(data = gradData.Edu, aes(x = gradData.Edu$value, 
+                                 fill = gradData.Edu$variable)) +
+         geom_histogram(alpha = 0.5) +
+         xlab("education level (%)") +
+         ggtitle("Education level of population over age 25")
+
+summary(cbind(gradData$pct_Not_HS_Grad_ACS_08_12, 
+              gradData$pct_College_ACS_08_12))
+
+```
+
+Looking at frequency histograms and boxplots of the entire dataset, it appears that the the percent of adults who are not highschool graduates and those that are college graduates are very similar. The mean percentage per census tract of non-high school grads is 14%, and the mean percentage of college grads is 22%. However, there significant outliers in both variables. Both histograms are positively skewed.  I wonder what the correlation is between the two populations. Are there school districts/census tracts where there is both a large percentage of non-high school grads and college grads? What is the graduation rate for those districts? What is the correlation between adult education level and high school graduation rates?
+
+In addition to race, language, and education level, I suspect poverty may play a role in graduation rates. What is the distribution of poverty levels in the United States?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, Poverty_Rates}
+
+ggplot(data = gradData, aes(gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_histogram(binwidth=1) +
+  xlab("poverty rate") +
+  ggtitle("percent of households below poverty level")
+
+```
+
+The histogram of poverty rates is positively skewed.  The majority of school districts have poverty levels below 25 percent. However, there are some school districts with poverty rates higher than 50%.  I imagine that the household poverty level correlates with the percent of economically disadvantaged students in the graduating cohort, but how does that effect total graduation rates?  
+
+Another demographic variable that is often correlated with poverty rate is unemployment rate. What is the age distribution of unemployment rates in the US?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, unEmp}
+#reshape data to compare variables
+gradData.Employ <- melt(gradData, id.vars = "ALL_RATE_1112", 
+                     measure.vars = c("pct_Civ_unemp_16p_ACS_08_12",
+                             "pct_Civ_unemp_16_24_ACS_08_12",
+                             "pct_Civ_unemp_25_44_ACS_08_12",
+                             "pct_Civ_unemp_45_64_ACS_08_12",
+                             "pct_Civ_unemp_65p_ACS_08_12"))
+gradData.Employ <- subset(gradData.Employ, !is.na(gradData.Employ$value))
+#str(gradData.Employ)
+
+ggplot(data = gradData.Employ, aes(x = gradData.Employ$value)) +
+  geom_histogram(binwidth = 1) +
+  xlab("percent unemployment for all adults over age 16") +
+  ggtitle("Unemployment rate") +
+  xlim(0,60)
+
+ggplot(data = gradData.Employ, aes(x = gradData.Employ$value, 
+                                 fill = gradData.Employ$variable)) +
+         geom_histogram(binwidth=1, alpha=0.5) +
+         xlab("percent unemployment for adults over age 16 binned by age") +
+         ggtitle("Unemployment rate")
+
+summary(cbind(gradData$pct_Civ_unemp_16p_ACS_08_12, 
+              gradData$pct_Civ_unemp_16_24_ACS_08_12, 
+              gradData$pct_Civ_unemp_25_44_ACS_08_12, 
+              gradData$pct_Civ_unemp_45_64_ACS_08_12,
+              gradData$pct_Civ_unemp_65p_ACS_08_12))
+
+```
+
+The unemployment rates in total and for each age binning appear to be very similar when assessed via histogram. However, when we look at the stats, we see that the mean unemployment rate varies between 5.2% for ages 65+ (V5) and 18% for ages 16-24 (V2). It is likely that the unemployment rate is higher for this latter population because a percentage of the population would still be in school (either high school or college). How does the high school graduation rate correlate with the unemployment rate for each age group? Is a high unemplyment rate for people ages 16-24 indicative or higher, lower, or neutral graduation rates?  
+
+In summary, a univariate analysis of the census data provides a snapshot of the US population as a whole, but no conclusions can be made about how demographic data correlates with high school graduation rates. A more detailed analysis will be needed.
+
+## Graduation Rates by Location
+
+One set of variables that I did not include in the above univariate anaylsis was that related to location (State, County). Now, however, it will be interesting to see how graduation rates vary by location.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, State}
+
+#choroplethr needs two columns in the df: "region" and "value"
+region =tolower(as.character(gradData.All$State_name))
+value = gradData$ALL_RATE_1112
+df.statemaps = data.frame(region, value)
+#head(df.maps)
+
+#multiple entries for each state, so I need to aggregate and take the mean
+df.statemaps.sum <- df.statemaps %>%
+  group_by(region) %>%
+  summarise(state.mean = mean(value, na.rm = TRUE))
+#names(df.maps.sum)
+df.statemaps.sum$value = df.statemaps.sum$state.mean
+#str(df.statemaps.sum)
+
+state_choropleth(df.statemaps.sum,
+                 title = "Graduation Rates by State",
+                 legend = "Graduation Rates",
+                 num_colors = 5)
+
+```
+
+The graduation rate varies widely by state, however, from the choropleth, it is obvious that there are several regions where the graduation rate is significantly lower than elsewhere in the country: the Southeast and the Great Plains being the most prominent areas. The Northeast and West Coast appear to have higher graduation rates. No graduation data is available for Idaho, Oklahoma, and Kentucky. Are the demographics between the higher-performing regions significantly different than the low performing regions? Or is there better funding for education/different educational policies that influence graduation rates? This investigation will seek to answer the first question.  
+
+Looking at graduation rates by state is a rather coarse-grained approach to investigating the geographic relationship between graduation rates. I can also look at graduation rates by county.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, County}
+
+#Add 2-digit state FIPS codes and 3-digit county FIPS codes together
+gradData$State = sprintf("%02d", as.numeric(gradData$State))
+gradData$County = sprintf("%03d", as.numeric(gradData$County))
+gradData$FIPS = paste(gradData$State, gradData$County, sep = "")
+
+region = as.numeric(gradData$FIPS)
+value = gradData$ALL_RATE_1112
+df.maps = data.frame(region, value)
+#head(df.maps)
+
+#multiple entries for each county, so I need to aggregate and take the mean
+df.maps.sum <- df.maps %>%
+  group_by(region) %>%
+  summarise(mean = mean(value, na.rm = TRUE))
+#names(df.maps.sum)
+df.maps.sum$value = df.maps.sum$mean
+#str(df.maps.sum)
+
+county_choropleth(df.maps.sum,
+                 title = "Graduation Rates by County",
+                 legend = "Graduation Rates",
+                 num_colors = 9)
+
+county_choropleth(df.maps.sum,
+                 title = "Graduation Rates by County, Gradient",
+                 legend = "Graduation Rates",
+                 num_colors = 1)
+
+```
+
+In general, the trends that were observed at a statewide level are observed at the county level. The Southeast and Great Plains appear to have lower graduation rates than the Northeast, in particular. However, there are pockets of areas with high graduation rates in these areas as well.  Of note, only one county in Oregon and one county in Hawaii reported graduation rates in this dataset, this observation was not observable when looking at data at the statewide level. Also, the binning in the first map (creating 9 equally sized bins) obscures counties with very low graduation rates, since the first bin contains graduation rates from 20-68.9%. It is easier to pick out very low graduation rates on a gradient map.  
+
+The gradient map is not as useful in looking at the graduation rates in the majority of the counties, since the data is so highly skewed, but it does highlight the outliers well: There are some counties in Colorado, South Dakota, Nebraska, and Kansas where the graduation rate is very low.  The two counties with the lowest graduation rates are: Sedgwick County, CO (08115), Kiowa County, KS (20097).   
+
+I looked up the statistics for these counties - Sedgwick County only has a total population of ~2000 people, it's possible that students from these census tracts go to other surrounding high schools. Kiowa County was hit by an EF5 tornado in 2007 - the beginning year of our graduating cohort, again, this may negatively influence graduation rates since most students would presemably leave the county.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE}
+head(arrange(df.maps.sum, value), n=2)
+```
+
+Clearly there is a wide geographic variation in graduation rates, that may or may not be related to population demographics. I could explore this variable in greater depth, but instead I would like to go ahead and start looking at the rest of the demographic data.  
+
+## Computing correlations
+
+Since even the pared-down dataset has more than 80 variables, I want to first use a correlation matrix to focus my further analysis.  The correlation matrix will allow me to pick out not-obvious trends in how the variables are related and may lead to some interesting insights.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, include=FALSE, Corr}
+#create new dataframe without the grad rate special population and minor lang.
+
+gradData.Demo <- gradData[-c(1, 3:10, 30:48, 50:55, 55, 59:66)]
+#convert state, county, FIPS to numeric to calculate correlation coeffs.
+gradData.Demo[, c(2, 3, 43)] <- 
+  sapply(gradData.Demo[, c(2, 3, 43)], as.numeric)
+#str(gradData.Demo)
+
+```
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE}
+#calculate correlation coefficients and p-values
+corrMatrix <- rcorr(as.matrix(gradData.Demo))
+
+#format correlation matrix: see references for code citation
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor = (cormat)[ut],
+    p = pmat[ut]
+  )
+}
+
+CorrMatrix.tidy <- flattenCorrMatrix(corrMatrix$r, corrMatrix$P)
+CorrMatrix.sort <- CorrMatrix.tidy[order(CorrMatrix.tidy[,3],
+                                         CorrMatrix.tidy[,4],
+                                         decreasing = TRUE),]
+
+#print strongest correlations  
+head(CorrMatrix.sort[1:3], 25)
+tail(CorrMatrix.sort[1:3], 25)
+
+```
+
+After removing all the minor languages, there are 43 variables to consider in the dataset. A correlation matrix will consist of 1849 correlations between variables. Printed above are the fifty most positive and 25 most negative correlations between variables, sorted first by Pearson correlation coefficient then by P-value.  State and FIPS are near perfectly correlated since the State 2 digit codes are the leading numerals in the FIPS codes. Not suprisingly, there are high positive correlations between the percentage of households that identify as Hispanic, and the percent of the population that speaks Spanish.  
+
+Looking at the graduation data, the total graduation rate is strongly or moderately correlated to the graduation rate of special populations. And, the graduation rates of special populations are strongly or moderately correlated to each other. This is not suprising. It appears that schools with high graduation rates in general have high graduation rates of special populations, and vice versa.  
+
+The total graduation rate is only mildly negatively correlated to the percent of the population below the poverty level (-0.22). Interestingly, the graduation rates of students with disabilities (CWD) are mildly negatively correllated with poverty level, suggesting that students with disabilities graduate at a lower rate if the school serves a higher percentage of economically disadvantaged people.  Likewise, CWD is mildly negatively correlated with the percentage of people identifying as Black (-0.26).  The graduation rates for white students (MWH) is also mildly negatively correlated with the percent of the population that is Black (-0.23). Given that the percent of the Black population is moderately positively correlated with the poverty level (0.39), the negative correlation between the graduation rate of white students and the percent of the population identifying as Black could be related to poverty, even though these correlations are not obvious in a pair-wise consideration.  
+
+It is hard to visualize correlations with a large table, so I'll use a heatmap to help me visually parse the correlation data better.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, CorrMatrix}
+
+#create a heatmap to visualize the correlation matrix
+gradCorr <- cor(gradData.Demo[sapply(gradData.Demo, is.numeric)], 
+                use = "complete.obs", method = "pearson")
+
+#set up a color scale for the correlation matrix
+col <- colorRampPalette(c("red", "white", "blue"))(10)
+pheatmap(gradCorr, col=col, cluster_cols=T, cellwidth = 10, cellheight = 10)
+
+
+```
+
+Red denotes a negative correlation, while blue denotes a positive correlation. The color is graduated based on the strength of the correlation. The heatmap allows us to pickout additional trends in the data. If I focus on the right-most column of the heatmap, this shows the correlations between the total graduation rate and all other variables. A few trends are evident.  As mentioned above, the graduation rate is positively correlated to the graduation rate of special populations. It is also mildly positively correllated to geographic variables (state, county), the total population, the percent Whites, percent of people who speak only English, and certain age demographic groups (population under 5, population between ages 5-17 and 25-44). It is negatively correlated with unemployment rate, predominately speaking a language other than English, percent of non-white populations, poverty level, percent of non-high school graduates over age 25, and certain age demographics (population between 18-24, 45-64, and 65 plus).
+
+In the following bi-variate analysis I will only focus on how the total graduation rate varies with the graduation rates of special populations, poverty level, and education level of the population over age 25. I have already explored how graduation rate varies by geographic location. I will focus on the correlations between graduation rate and the rest of the demographic data in the multi-variate analysis.
+
+## Graduation Rates of Special Populations
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, spepop}
+
+#scatterplots of special populations vs all grad rate
+CWD_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = CWD_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total grad rate") +
+  ylab("grad rate - students with disabilities")
+
+ECD_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = ECD_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total grad rate") +
+  ylab("grad rate - economically disadvantaged")
+
+
+grid.arrange(CWD_ALL.plot, ECD_ALL.plot)
+
+#correlations
+CWD_ALL.cor <- cor(gradData$ALL_RATE_1112, gradData$CWD_quint,
+    use = "complete.obs", method = "pearson")
+
+ECD_ALL.cor <- cor(gradData$ALL_RATE_1112, gradData$ECD_quint,
+    use = "complete.obs", method = "pearson")
+
+CWD_ALL.cor
+ECD_ALL.cor
+```
+
+These plots look at the graduation rates of special populations vs. the total graduation rate. The size of a point on the plot is mapped to the number of observations at that point. The blue line is a linear fit of the data, with the shaded region indicating 95% confidence intervals for the fit.  This visualization is useful in picking out outliers. There is a high positive correlation between the total graduation rate of students and the graduation rates of both students with disabilities (0.67) and economically disadvantaged students (0.71).  School that do a good job graduating these special populations graduate a high number of students overall, and vice versa. When I look at the correlation heatmap above, these are the most significant correlations between the total graduation rate and all other variables. It suggests that in order to increase overall graduation rates, school should put policies in place that increase the graduation rates of these two special populations.
+
+What does the correlation between special populations look like?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, sppop2}
+ggplot(gradData, aes(x = ECD_quint, y = CWD_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 1, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("graduation rate - economically disadvantaged") +
+  ylab("graduation rate - students with disabilities")
+
+cor(gradData$CWD_quint, gradData$ECD_quint,
+    use = "complete.obs", method = "pearson")
+```
+
+Not suprisingly, there is a moderate positive correlation (0.54) between the graduation rates of students with disabilities and economically disadvantaged students. Schools appear to do either a good or poor job of graduating both these special populations.  
+
+Next, I want to see if racial group is correllated to overall graduation rate.
+
+## Graduation Rates by Racial Groups
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, rates1}
+
+#2D scatter plots of graduation rate variance by race
+MWH_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = MWH_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total graduation rate") +
+  ylab("grad rate - White")
+
+MBL_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = MBL_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total graduation rate") +
+  ylab("grad rate - Black")
+
+MHI_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = MHI_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total graduation rate") +
+  ylab("grad rate - Hispanic")
+
+MAM_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = MAM_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total graduation rate") +
+  ylab("grad rate - Native American")
+
+MAS_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = MAS_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total graduation rate") +
+  ylab("grad rate - Asian")
+
+MTR_ALL.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, y = MTR_quint)) +
+  geom_count(alpha = 0.5,
+             position = position_jitter(width = 0, height = 0.5)) +
+  geom_smooth(method = lm) +
+  xlab("total graduation rate") +
+  ylab("grad rate - Biracial")
+
+grid.arrange(MWH_ALL.plot, MBL_ALL.plot, MHI_ALL.plot, MAM_ALL.plot,
+             MAS_ALL.plot, MTR_ALL.plot)
+
+```
+
+
+These plots look at the correlation between the graduation rate of students of a particular race vs. all students. As the heatmap and correlation coefficients showed, there is a positive correlation between the total graduation rate and the graduation rates of students of a particular race.  However, there are some outliers, as these charts clearly show. Some schools that have an overall high graduation rate have a low graduation rate for minority students, particularly Native Americans. This is also true for Black, Hispanic, and Asian students. I wonder what factors could be contributing to this phenomena.  Perhaps the graduation rate of minority students is lower when they are a minority in the general population.  I'll look at how the graduation rate of minorities is corellated with the percent of the population that is White.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, rates2}
+
+#scatter plot of graduation rates by race vs. percent White
+MWH_White.plot <- ggplot(gradData, aes(x = pct_NH_White_alone_ACS_08_12, 
+                                  y = MWH_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 0, height = 1)) +
+  geom_smooth(method = lm)+
+  xlab("% population White") +
+  ylab("grad rate - White students")
+
+MBL_White.plot <- ggplot(gradData, aes(x = pct_NH_White_alone_ACS_08_12,
+                                  y = MBL_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 0, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("% population White") +
+  ylab("grad rate - Black students")
+
+
+MHI_White.plot <- ggplot(gradData, aes(x = pct_NH_White_alone_ACS_08_12,
+                                  y = MHI_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 0, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("% population White") +
+  ylab("grad rate - Hispanic students")
+
+MAM_White.plot <- ggplot(gradData, aes(x = pct_NH_White_alone_ACS_08_12,
+                                  y = MAM_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 0, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("% population White") +
+  ylab("grad rate - Native students")
+
+MAS_White.plot <- ggplot(gradData, aes(x = pct_NH_White_alone_ACS_08_12,
+                                  y = MAS_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 0, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("% population White") +
+  ylab("grad rate - Asian students")
+
+MTR_White.plot <- ggplot(gradData, aes(x = pct_NH_White_alone_ACS_08_12,
+                                  y = MTR_quint)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 0, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("% population White") +
+  ylab("grad rate - Biracial students")
+
+grid.arrange(MWH_White.plot, MBL_White.plot, MHI_White.plot,
+             MAM_White.plot, MAS_White.plot, MTR_White.plot)
+
+#correlations between variables
+MWH_White.cor <- cor(gradData$pct_NH_White_alone_ACS_08_12, gradData$MWH_quint,
+    use = "complete.obs", method = "pearson")
+
+MBL_White.cor <- cor(gradData$pct_NH_White_alone_ACS_08_12, gradData$MBL_quint,
+    use = "complete.obs", method = "pearson")
+
+MHI_White.cor <- cor(gradData$pct_NH_White_alone_ACS_08_12, gradData$MHI_quint,
+    use = "complete.obs", method = "pearson")
+
+MAM_White.cor <- cor(gradData$pct_NH_White_alone_ACS_08_12, gradData$MAM_quint,
+    use = "complete.obs", method = "pearson")
+
+MAS_White.cor <- cor(gradData$pct_NH_White_alone_ACS_08_12, gradData$MAS_quint,
+    use = "complete.obs", method = "pearson")
+
+MTR_White.cor <- cor(gradData$pct_NH_White_alone_ACS_08_12, gradData$MTR_quint,
+    use = "complete.obs", method = "pearson")
+
+table(MWH_White.cor, MBL_White.cor, MHI_White.cor, MAM_White.cor, 
+             MAS_White.cor, MTR_White.cor)
+```
+
+This avenue of exploration appears to be a dead end.  There are no significant correlations between the graduation rates of minority students and the percent of the population that is white.  There is a small correlation between the graduation rates of white students and the percent of the population that is white (0.22), but this may be due to other demographic factors, such as poverty level.  
+
+Let me check the corellation between the percent of a population that is white and poverty level:
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, include=FALSE, cor2}
+cor(gradData$pct_NH_White_alone_ACS_08_12, 
+    gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12, use = "complete.obs",
+    method = "pearson")
+```
+
+There is a moderate negative correlation (-0.48) between the percent of the population that is white and the percent of people below the poverty level. The observed correlation between the graduation rates of white students and the percent of the population that is white could be due to other demographics like the poverty rate instead of race.  
+
+I'll look at how poverty rate is correlated to graduation rate: 
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy=TRUE, rates3}
+
+ggplot(gradData, aes(x = ALL_RATE_1112, y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 1, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("Graduation rate") +
+  ylab("% people below the poverty level")
+
+cor(gradData$ALL_RATE_1112, gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+
+```
+
+There is a mild negative correlation (-0.26) between the graduation rate and the percent of people below the poverty level. However, on this chart, the outliers are most interesting.  There are 10 districts where both the graduation rate and the poverty rate are above 75%. It may be interesting to explore this subset of data in more detail later.  
+
+But right now, I want to look at how other demographic variables influence graduation rate.
+
+## Effect of adult education level on graduation rates
+
+Another factor that may be important in graduation rates is the education level of the general population. I want to look at if this effects graduation rates, and if it does so, how.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, tidy = TRUE, EdLevel}
+
+College_Grad.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, 
+                                  y = pct_College_ACS_08_12)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 1, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("Graduation Rate") +
+  ylab("% population with college degree")
+
+No_Grad.plot <- ggplot(gradData, aes(x = ALL_RATE_1112, 
+                                  y = pct_Not_HS_Grad_ACS_08_12)) +
+  geom_point(alpha = 0.1,
+             position = position_jitter(width = 1, height = 1)) +
+  geom_smooth(method = lm) +
+  xlab("Graduation Rate") +
+  ylab("% population without a HS diploma")
+
+grid.arrange(College_Grad.plot, No_Grad.plot)
+
+College_Grad.cor <- cor(gradData$ALL_RATE_1112, 
+                        gradData$pct_College_ACS_08_12, 
+                        use = "complete.obs", method = "pearson")
+
+Not_Grad.cor <- cor(gradData$ALL_RATE_1112, gradData$pct_Not_HS_Grad_ACS_08_12, 
+                    use = "complete.obs", method = "pearson")
+
+table(College_Grad.cor, Not_Grad.cor)
+
+cor(gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12, 
+                        gradData$pct_College_ACS_08_12, 
+                        use = "complete.obs", method = "pearson")
+
+```
+
+There is a mild positive correlation (0.24) between high school graduation rate and percent of college graduates in a population.  There is a mild negative correlation (-0.20) between high school graduation rate and the percent of non-high school grads in a population. These results are what I expected, but may be due to poverty or other demographic factors that are correllated with education level in the census data. If I look back at the heatmap of correlations, I see that education level is negatively correlated to percent of persons below the poverty level and to the unemployment rate. The correlation between poverty rate and college degree is -0.42. This observation again suggests that high school graduation rates are affected by multiple, complex demographic variables.  
+
+## Demographic factors effecting graduation rates - multivariate
+
+Now I want to look at how graduation rates are affected by the age distribution of the population, race, and language.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, GradAge}
+
+ggplot(data = gradData.Pop, aes(x = gradData.Pop$ALL_RATE_1112,
+                                y = gradData.Pop$value,
+                                colour = gradData.Pop$variable)) +
+        geom_count(alpha = 0.2,
+             position = position_jitterdodge()) +
+        ylim(c(0,50)) +
+        geom_smooth(method = lm) +
+        xlab("Graduation Rate") +
+        ylab("% population in age group") +
+        facet_wrap(~variable)
+
+```
+
+This plot is a scatterplot of graduation rate vs. percent of population binned by age. There appears to be no strong correlation between graduation rates and the age distribution of the population. I will not consider these variables in later analysis.
+
+I wonder if there is any corellation between race and graduation rate. I saw earlier that there was a mild positive correlation between graduation rates and the percent of whites in a population. I wonder if there is any corellation between the total graduation rate and minorities.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, GradRace}
+
+ggplot(data = gradData.Race, aes(x = gradData.Race$ALL_RATE_1112,
+                                y = gradData.Race$value,
+                                colour = gradData.Race$variable)) +
+        geom_count(alpha = 0.2,
+             position = position_jitter()) +
+        scale_y_log10() +
+        geom_smooth(method = lm) +
+        xlab("Graduation Rate") +
+        ylab("% population (log10)") +
+        facet_wrap(~variable)
+
+```
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, raceCor}
+cor(gradData$ALL_RATE_1112, gradData$pct_Hispanic_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_NH_White_alone_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_NH_Blk_alone_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_NH_AIAN_alone_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_NH_Asian_alone_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_NH_NHOPI_alone_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_NH_SOR_alone_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+
+```
+
+
+This plot looks at graduation rate vs. percent of the population of a particular race. There are mild correlations between graduation rates % population that is Black (-0.20), and Native American (-0.22). The other corellations are not significant. It's interesting that there is not a correlation between the graduation rate and the percent of the population that is Hispanic.  The strongest correlation observed in the entire dataset is between the percent of pepole in a census tract that identify as Hispanic and the percent of people who speak Spanish. There is almost no correlation between graduation rates and those that identify as Hispanic (-0.05), but I wonder if the percent of people that speak a language other than English is at all correlated to graduation rates.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, GradLanguage}
+ggplot(data = gradData.Lang, aes(x = gradData.Lang$ALL_RATE_1112,
+                                y = gradData.Lang$value,
+                                colour = gradData.Lang$variable)) +
+        geom_count(alpha = 0.2,
+             position = position_jitter()) +
+        scale_y_log10() +
+        geom_smooth(method = lm) +
+        xlab("Graduation Rate") +
+        ylab("% population (log10)") +
+        facet_wrap(~variable)
+
+cor(gradData$ALL_RATE_1112, gradData$pct_Age5p_Only_Eng_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_Othr_Lang_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_Age5p_Spanish_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_Age5p_Chinese_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_Age5p_Tagalog_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_Age5p_Vietnames_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_Age5p_French_ACS_08_12, 
+    use = "complete.obs", method = "pearson")
+cor(gradData$ALL_RATE_1112, gradData$pct_OtherMinorLang, 
+    use = "complete.obs", method = "pearson")
+```
+
+There are no strong correlations between graduation rates and language. I will not pursue this line of questioning further.
+
+I've seen in both the bivariate analysis and multivariate analysis so far that graduation rates cannot be correllated to a single demographic variable. Likely, it is a combination of demographic variables that influence graduation rates in communities.
+
+I'd now like to look at some of the variables that showed mild correlations to graduation rates, and see if they strengthen one another.
+
+##Graduation rates and indicators of poverty.
+
+Since adult education level and unemployment rates are both correlated with poverty rates, lets see how these factors together influence graduation rates.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, EduPov}
+
+ggplot(data = gradData, aes(x = 100 - ALL_RATE_1112,
+                            y = pct_Not_HS_Grad_ACS_08_12)) +
+  geom_point(alpha = 0.5, aes(colour = gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12),
+             position = position_jitter(width = 1.5, height = 1.5)) +
+  scale_color_gradient2(midpoint = 40) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Adults without a HS degree (%)", trans = "sqrt") +
+  theme_dark()
+
+```
+
+There appears to be a trend in this plot, let me take a closer look at the lower left hand quadrant and upper right hand quadrant:
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, EduPov2}
+#summary(gradData$ALL_RATE_1112)
+#summary(gradData$pct_Not_HS_Grad_ACS_08_12)
+
+#subset the data to look at quadrants of the plot above
+GradRateNoHS.sub1 <- subset(gradData, ALL_RATE_1112 >= 83 & 
+                             pct_Not_HS_Grad_ACS_08_12 <= 14)
+
+GradRateNoHS.sub2 <- subset(gradData, ALL_RATE_1112 <=83 & 
+                             pct_Not_HS_Grad_ACS_08_12 >= 14)
+
+GradNoHS.plot1 <- ggplot(data = GradRateNoHS.sub1, 
+                         aes(x = 100 - ALL_RATE_1112,
+                            y = pct_Not_HS_Grad_ACS_08_12)) +
+  geom_point(alpha = 0.5, 
+             aes(colour = GradRateNoHS.sub1$pct_Prs_Blw_Pov_Lev_ACS_08_12),
+             position = position_jitter(width = 1.5, height = 1.5)) +
+  scale_color_gradient2(midpoint = 40) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Adults without a HS degree (%)", trans = "sqrt") +
+  theme_dark()
+
+GradNoHS.plot2 <- ggplot(data = GradRateNoHS.sub2, 
+                         aes(x = 100 - ALL_RATE_1112,
+                            y = pct_Not_HS_Grad_ACS_08_12)) +
+  geom_point(alpha = 0.5, 
+             aes(colour = GradRateNoHS.sub2$pct_Prs_Blw_Pov_Lev_ACS_08_12),
+             position = position_jitter(width = 1.5, height = 1.5)) +
+  scale_color_gradient2(midpoint = 40) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Adults without a HS degree (%)", trans = "sqrt") +
+  theme_dark()
+
+grid.arrange(GradNoHS.plot1, GradNoHS.plot2)
+
+summary(GradRateNoHS.sub1$pct_Prs_Blw_Pov_Lev_ACS_08_12)
+summary(GradRateNoHS.sub2$pct_Prs_Blw_Pov_Lev_ACS_08_12)
+
+```
+
+These two plots are the lower left and upper right quadrants of the plot above.  Lower graduation rates appear to be correlated with a higher poverty rate and a higher percent of adults without a high school degree. These plots are split along the mean graduation rate (83%) and the mean % of adults without a high school degree (14%).  The mean poverty rate for census tracts with a higher than average graduation rate and lower than average % of adults without a high school degree is 9%. The poverty rate for the opposite case is 22%.
+
+I saw earlier that there was a correlation between the graduation rate of economically disadvantaged students and the total graduation rate. I wonder if there is a correlation between poverty rates, the graduation rates of economically disadvantaged students, and the total graduation rate.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, ECDPovAll}
+ggplot(data = gradData, aes(x = 100 - ALL_RATE_1112,
+                            y = ECD_quint)) +
+  geom_point(alpha = 0.5, aes(colour = gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12),
+             position = position_jitter(height = 0.75, width = 2)) +
+  scale_color_gradient2(midpoint = 35) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Grad Rate - ECD students (%)") +
+  theme_dark()
+
+```
+
+There does not appear to be a strong correlation between poverty rate, the graduation rate of ECD students, and the total graduation rate.
+
+## Racial demographics, poverty, and graduation rate
+
+The graduation rates of Native Americans and Blacks are lower than those of white students. On the heatmap above we also saw that the percent of people below the poverty level was correlated with the percent of people identifying as Black and Native American, and Hispanic. I'd like to explore if poverty is a factor in low graduation rates of these minorities.
+
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, NAPov}
+
+ggplot(data = gradData, aes(x = MAM_quint,
+                            y = pct_NH_AIAN_alone_ACS_08_12)) +
+  geom_point(aes(colour = gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12),
+             position = position_jitter(height = 1, width = 0.5), size = 2) +
+  scale_color_gradient2(midpoint = 35) +
+  scale_x_continuous(name = "HS Grad Rate - Native American (quintile)") +
+  scale_y_continuous(name = "% Native American Population", trans = "sqrt") +
+  theme_dark()
+
+```
+
+In this plot we see that a higher percentage of Native Americans in the population is correlated with a higher poverty level, but not necessarily a lower graduation rate for Native American students. There appears to be an equal distribution of high poverty and low poverty census tracts across all quintiles of NAm grad rates. A factor other than poverty may explain lower graduation rates for these students.  
+
+I wonder if there is a relationship between Black student graduation rates and poverty.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, BlkPov}
+ggplot(data = gradData, aes(x = MBL_quint,
+                            y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_point(alpha = .5, aes(colour = gradData$pct_NH_Blk_alone_ACS_08_12),
+             position = position_jitter(height = 1, width = 1), size = 2) +
+  scale_color_gradient2(midpoint = 35) +
+  scale_x_continuous(name = "HS Grad Rate - Black (quintile)") +
+  scale_y_continuous(name = "Poverty Rate", trans = "sqrt") +
+  theme_dark()
+```
+There is more data on these plots, so it is harder to see trends in the data. I will need to use a different plot to look at this data.
+
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, BlkPov2}
+
+GradBlkPov.sub1 <- subset(gradData, pct_NH_Blk_alone_ACS_08_12 <= 20, rm.na = TRUE)
+
+GradBlkPov.sub2 <- subset(gradData,  pct_NH_Blk_alone_ACS_08_12 >=50, rm.na = TRUE)
+
+
+GradBlkPov.plot1 <- ggplot(data = GradBlkPov.sub1, aes(x = factor(MBL_quint),
+                            y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "red") +
+  xlab("HS Grad Rate - Black (quintile)") +
+  ylab("Poverty Rate") +
+  ggtitle("low population Black community") +
+   scale_y_continuous(limits = c(0, 75))
+
+GradBlkPov.plot2 <- ggplot(data = GradBlkPov.sub2, aes(x = factor(MBL_quint),
+                            y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "blue") +
+  xlab("HS Grad Rate - Black (quintile)") +
+  ylab("Poverty Rate") +
+  ggtitle("high population Black community") +
+  scale_y_continuous(limits = c(0, 75))
+
+grid.arrange(GradBlkPov.plot1, GradBlkPov.plot2, ncol=1)
+
+t.test(GradBlkPov.sub1$MBL_quint, GradBlkPov.sub2$MBL_quint)
+
+```
+
+In this plot, I am looking at the graduation and poverty rates of two populations: communities where the percent  of Blacks is less than 25%, and those where the percent of Blacks is greater than 75%. It's interesting that the school districts that have the lowest graduation rates of Black students in a cohort are in communities that have a low population of Blacks and have a low poverty rate. However, the means of the Black student graduation rate are similar: 4.288803 for communities with a low Black population, and 4.139373 for communities with a high Black population. I performed a Welch's t-test on these two samples to see if this difference in means is significant. P-critial was chosen to be 0.05. The calculated p-value was 0.0004026, so this difference is statistically significant. Black students graduate at lower rates when the surrounding community is majority Black, compared to when the surrounding community is not majority Black.  This effect could be explained by poverty rates: in majority Black communities, the poverty rate is greater, on average, than in minority Black communities. Let me next consider the two extremes: the graduation rates of Black students in communities where there is low poverty and high percent Black, and high poverty, low percent Black:
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, BlkPov3}
+
+GradBlkMBL.sub1 <- subset(gradData, pct_Prs_Blw_Pov_Lev_ACS_08_12 <= 15 &
+                            pct_NH_Blk_alone_ACS_08_12 >= 50, rm.na = TRUE)
+
+GradBlkMBL.sub2 <- subset(gradData,  pct_Prs_Blw_Pov_Lev_ACS_08_12 >= 30 &
+                            pct_NH_Blk_alone_ACS_08_12 <= 50, rm.na = TRUE)
+
+
+GradBlkMBL.plot1 <- ggplot(data = GradBlkMBL.sub1, aes(x = factor(MBL_quint),
+                            y = pct_NH_Blk_alone_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "red") +
+  xlab("HS Grad Rate - Black (quintile)") +
+  ylab("% Black population") +
+  ggtitle("low poverty rate, high Black pop") +
+   scale_y_continuous(limits = c(0, 100))
+
+GradBlkMBL.plot2 <- ggplot(data = GradBlkMBL.sub2, aes(x = factor(MBL_quint),
+                            y = pct_NH_Blk_alone_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "blue") +
+  xlab("HS Grad Rate - Black (quintile)") +
+  ylab("% Black population") +
+  ggtitle("high poverty rate, high Black pop") +
+  scale_y_continuous(limits = c(0, 100))
+
+grid.arrange(GradBlkMBL.plot1, GradBlkMBL.plot2, ncol=1)
+
+t.test(GradBlkMBL.sub1$MBL_quint, GradBlkMBL.sub2$MBL_quint)
+```
+
+Ok, this is interesting. There is no statistically significant difference between these two samples (p-value = 0.07865). The graduation rates of Black students in high poverty, majority Black communities are statistically the same as the graduation rates of Black students in low poverty, majority Black communities.  So, to recap: Black students graduate at lower rates when the surrounding community is Black, but this observation cannot be explained by poverty alone.
+
+I wonder if I see this same result for Hispanic students (the other large minority in the US)?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, HisPov}
+ggplot(data = gradData, aes(x = MHI_quint,
+                            y = pct_Hispanic_ACS_08_12)) +
+  geom_point(alpha = .5, aes(colour = gradData$pct_Prs_Blw_Pov_Lev_ACS_08_12),
+             position = position_jitter(height = 1, width = 1), size = 2) +
+  scale_color_gradient2(midpoint = 35) +
+  scale_x_continuous(name = "HS Grad Rate - Hispanic (quintile)") +
+  scale_y_continuous(name = "% Hispanic population", trans = "sqrt") +
+  theme_dark()
+```
+
+Again, I'm going to subset the data in this plot like I did before to look at the data from minority Hispanic communities and majority Hispanic communities.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, HisPov2}
+GradHisPov.sub1 <- subset(gradData, pct_Hispanic_ACS_08_12 <= 20, rm.na = TRUE)
+
+GradHisPov.sub2 <- subset(gradData,  pct_Hispanic_ACS_08_12 >=50, rm.na = TRUE)
+
+
+GradHisPov.plot1 <- ggplot(data = GradHisPov.sub1, aes(x = factor(MHI_quint),
+                            y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "red") +
+  xlab("HS Grad Rate - Hispanic (quintile)") +
+  ylab("Poverty Rate") +
+  ggtitle("low population Hispanic community") +
+   scale_y_continuous(limits = c(0, 75))
+
+GradHisPov.plot2 <- ggplot(data = GradHisPov.sub2, aes(x = factor(MHI_quint),
+                            y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "blue") +
+  xlab("HS Grad Rate - Hispanic (quintile)") +
+  ylab("Poverty Rate") +
+  ggtitle("high population Hispanic community") +
+  scale_y_continuous(limits = c(0, 75))
+
+grid.arrange(GradHisPov.plot1, GradHisPov.plot2, ncol=1)
+
+summary(GradHisPov.sub1$pct_Prs_Blw_Pov_Lev_ACS_08_12)
+summary(GradHisPov.sub2$pct_Prs_Blw_Pov_Lev_ACS_08_12)
+
+t.test(GradHisPov.sub1$MHI_quint, GradHisPov.sub2$MHI_quint)
+
+```
+
+Again, I see that the overall poverty rate for majority Hispanic communities is higher than in those communities where Hispanics are a minority (13.480 vs. 24.37).  This is the same observation I made above with respect to majority Black communities.  There is also a greater difference in the average graduation rates of Hispanic students in minority vs. majority Hispanic communities (minority = 4.23572, majority = 4.6000). This difference is statistically significant, with a p-value of 2.2e-16. What's really intriguing is that Hispanic students graduate at higher rates in communities with a majority Hispanic population, compared to communities with a minority Hispanic population.  This is the opposite effect of what I observed with Black students.
+
+Could this be a poverty rate effect? The difference in poverty rates between majority Hispanic and minority Hispanic communities is not as pronounced as it is between majority Black and minority Black communities. I'll subset the data again, this time looking at extremes in the poverty rate instead of extremes in % Hispanic.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, HisPov3}
+
+GradHisMHI.sub1 <- subset(gradData, pct_Prs_Blw_Pov_Lev_ACS_08_12 <= 15 &
+                            pct_Hispanic_ACS_08_12 >= 50, rm.na = TRUE)
+
+GradHisMHI.sub2 <- subset(gradData,  pct_Prs_Blw_Pov_Lev_ACS_08_12 >= 30 &
+                            pct_Hispanic_ACS_08_12 <= 20, rm.na = TRUE)
+
+GradHisMHI.sub3 <- subset(gradData, pct_Prs_Blw_Pov_Lev_ACS_08_12 <= 15 &
+                            pct_Hispanic_ACS_08_12 <= 20, rm.na = TRUE)
+
+GradHisMHI.sub4 <- subset(gradData,  pct_Prs_Blw_Pov_Lev_ACS_08_12 >= 30 &
+                            pct_Hispanic_ACS_08_12 >= 50, rm.na = TRUE)
+
+
+GradHisMHI.plot1 <- ggplot(data = GradHisMHI.sub1, aes(x = factor(MHI_quint),
+                            y = pct_Hispanic_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "red") +
+  xlab("HS Grad Rate - Hispanic (quintile)") +
+  ylab("% Hispanic population") +
+  ggtitle("low poverty rate, high Hispanic pop") +
+   scale_y_continuous(limits = c(0, 75))
+
+GradHisMHI.plot2 <- ggplot(data = GradHisMHI.sub2, aes(x = factor(MHI_quint),
+                            y = pct_Hispanic_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "blue") +
+  xlab("HS Grad Rate - Hispanic (quintile)") +
+  ylab("% Hispanic population") +
+  ggtitle("high poverty rate, low Hispanic pop") +
+  scale_y_continuous(limits = c(0, 75))
+
+GradHisMHI.plot3 <- ggplot(data = GradHisMHI.sub3, aes(x = factor(MHI_quint),
+                            y = pct_Hispanic_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "red") +
+  xlab("HS Grad Rate - Hispanic (quintile)") +
+  ylab("% Hispanic population") +
+  ggtitle("low poverty rate, low Hispanic pop") +
+   scale_y_continuous(limits = c(0, 75))
+
+GradHisMHI.plot4 <- ggplot(data = GradHisMHI.sub4, aes(x = factor(MHI_quint),
+                            y = pct_Hispanic_ACS_08_12)) +
+  geom_jitter(alpha = 0.25, colour = "grey") +
+  geom_boxplot(color = "blue") +
+  xlab("HS Grad Rate - Hispanic (quintile)") +
+  ylab("% Hispanic population") +
+  ggtitle("high poverty rate, high Hispanic pop") +
+  scale_y_continuous(limits = c(0, 75))
+
+grid.arrange(GradHisMHI.plot1, GradHisMHI.plot2, GradHisMHI.plot3,
+             GradHisMHI.plot4)
+
+summary(GradHisMHI.sub1$MHI_quint)
+summary(GradHisMHI.sub2$MHI_quint)
+summary(GradHisMHI.sub3$MHI_quint)
+summary(GradHisMHI.sub4$MHI_quint)
+
+t.test(GradHisMHI.sub1$MHI_quint, GradHisMHI.sub2$MHI_quint)
+
+```
+
+I've seen that Hispanic students graduate at a higher rate when the surrounding population is Hispanic. Looking at this set of four plots, I can see that the demographic groups with the highest mean graduation rates are low poverty, high Hispanic (4.694), and high poverty, high Hispanic (4.571). This observation supports the conclusion above that Hispanic students graduate at higher rates in majority Hispanic communities, and this appears to be independent of poverty rates. This is in contrast to Black students that appear to graduate at higher rates in minority Black communities, once again, independent of poverty rates.
+
+In summary, I've seen that, overall, poverty rates are negatively correllated with overall graduation rates. However, when I look at the graduation rates of economically disadvantaged students, Native Americans, Blacks, and Hispanics, the poverty rate is not a strong contributor to graduation rates for these populations. There appear to be many variables affecting graduation rates, it may be useful in the future to use factor analysis or PCA to identify other variables of interest that may be contributing to graduation rates.
+
+## Geographic variables revisited
+
+The final analysis I want to perform is one that looks at the correlation between graduation rates, state, poverty, and racial groups. What is still puzzling to me is why some states have significantly lower graduation rates than other states. Are their demographics that different?
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, StateDF}
+#create new dataframe of variables grouped by state and mean
+gradData.StateDemo <- gradData.All %>% group_by(State_name) %>%
+  select(ALL_RATE_1112, pct_Prs_Blw_Pov_Lev_ACS_08_12, 
+         pct_Civ_unemp_25_44_ACS_08_12, pct_Not_HS_Grad_ACS_08_12,
+         pct_College_ACS_08_12, pct_Hispanic_ACS_08_12, 
+         pct_NH_Blk_alone_ACS_08_12, pct_NH_White_alone_ACS_08_12, 
+         pct_NH_AIAN_alone_ACS_08_12, Othr_Lang_ACS_08_12, 
+         Pop_5yrs_Over_ACS_08_12) %>%
+  summarise(GradRateMean = mean(ALL_RATE_1112, na.rm = TRUE),
+            PovLevMean = mean(pct_Prs_Blw_Pov_Lev_ACS_08_12, na.rm = TRUE),
+            UnempMean = mean(pct_Civ_unemp_25_44_ACS_08_12, na.rm = TRUE),
+            NotHSMean = mean(pct_Not_HS_Grad_ACS_08_12, na.rm = TRUE),
+            ColGradMean = mean(pct_College_ACS_08_12, na.rm = TRUE),
+            OthLangMean = mean((Othr_Lang_ACS_08_12/Pop_5yrs_Over_ACS_08_12),
+                               na.rm = TRUE),
+            PopHisMean = mean(pct_Hispanic_ACS_08_12, na.rm = TRUE),
+            PopBlkMean = mean(pct_NH_Blk_alone_ACS_08_12, na.rm = TRUE),
+            PopWhtMean = mean(pct_NH_White_alone_ACS_08_12, na.rm = TRUE),
+            PopNAmMean = mean(pct_NH_AIAN_alone_ACS_08_12, na.rm = TRUE)
+            )
+
+# All the states are listed by full name - change to abbreviations
+#read in new file of state names and abbreviations, merge with dataframe
+StateAbbrevs.df <- read.csv('state_table.csv')
+gradData.StateDemo <- merge(gradData.StateDemo, StateAbbrevs.df, 
+                            by = "State_name")
+#plots
+MultiPovWht.plot <- ggplot(data = gradData.StateDemo, 
+                           aes(x = 100 - GradRateMean, 
+                               y = PopWhtMean,
+                               label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 5) +
+  scale_size(range = c(1,10)) +
+  geom_text(size = 2) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Population White (%)") +
+  theme_light() +
+  geom_smooth(method = lm)
+
+MultiPovBlk.plot <- ggplot(data = gradData.StateDemo, 
+                           aes(x = 100 - GradRateMean, 
+                               y = PopBlkMean, 
+                               label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 5) +
+  scale_size(range = c(1,10)) +
+  geom_text(size = 2) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Population Black (%)",
+                     trans = "sqrt") +
+  theme_light() +
+  geom_smooth(method = lm)
+
+MultiPovNAm.plot <- ggplot(data = gradData.StateDemo, 
+                           aes(x = 100 - GradRateMean, 
+                               y = PopNAmMean, 
+                               label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 5) +
+  scale_size(range = c(1,10)) +
+  geom_text(size = 2) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Population Native American (%)",
+                     trans = "log10") +
+  theme_light() +
+  geom_smooth(method = lm)
+
+MultiPovHis.plot <- ggplot(data = gradData.StateDemo, 
+                           aes(x = 100 - GradRateMean, 
+                               y = PopHisMean, 
+                              label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 5) +
+  scale_size(range = c(1,10)) +
+  geom_text(size = 2) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Population Hispanic (%)",
+                     trans = "log10") +
+  theme_light() +
+  geom_smooth(method = lm)
+
+grid.arrange(MultiPovWht.plot, MultiPovBlk.plot, MultiPovNAm.plot, 
+             MultiPovHis.plot)
+
+```
+
+Confirming the observations made above, when the data is grouped by state, there is a positive correlation between high school graduation rate and the percent of the population that is white, and a negative correlation between graduation rate and the percent of the population that is Black or Native American.  There is no correlation between graduation rate and the percent of the population that is Hispanic.  There may also be a mild correlation observed between the percent of the population that is Black, the poverty rate, and the total graduation rate when the data is grouped by state. A possible regional variation exists as well. i want to look at this plot in more detail.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, StateMulti1}
+MultiPovBlk.plot + geom_point(alpha = 0.3, aes(colour = PovLevMean), size = 8)
+```
+
+When I look at a larger version of this plot, I can see that states in the deep South (NC, AL, SC, MS, LA, GA, FL) have a lower than average high school graduation rate, a higher percent of the population that is Black, and a higher poverty rate than other states outside of the deep South that have higher high school graduation rates. It suggests that the deep South may be an area to focus resources on if we want to make the biggest change in high school graduation rates nationally.  Policies that increase integration of Black students into more affluent schools and decrease poverty rates overall may be beneficial in raising graduation rates in the South.
+
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, StateMulti5}
+MultiPovState.plot <- ggplot(data = gradData.StateDemo, aes(x = 100 - GradRateMean, 
+                                      y = PovLevMean,
+                                      label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = ColGradMean), size = 5) +
+  geom_text(size = 3) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint =28 ) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Poverty Rate (%)") +
+  geom_smooth(method = lm) +
+  theme_light()
+
+
+MultiPovNoHS.plot <- ggplot(data = gradData.StateDemo, 
+                           aes(x = 100 - GradRateMean, 
+                               y = NotHSMean, 
+                               label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 5) +
+  scale_size(range = c(1,10)) +
+  geom_text(size = 3) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "No High School Degree (%)",
+                     trans = "sqrt") +
+  geom_smooth(method = lm) +
+  theme_light()
+
+MultiNoHSColl.plot <- ggplot(data = gradData.StateDemo, 
+                            aes(x = 100 - GradRateMean, 
+                                y = NotHSMean,
+                                label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = ColGradMean), size = 5) +
+  scale_size(range = c(1,20)) +
+  geom_text(size = 3) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "No High School Degree (%)",
+                     trans = "sqrt") +
+  geom_smooth(method = lm) +
+  theme_light()
+
+MultiPovColl.plot <- ggplot(data = gradData.StateDemo, 
+                            aes(x = 100 - GradRateMean, 
+                                y = ColGradMean,
+                                label = Abbreviation)) + 
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 5) +
+  scale_size(range = c(1,20)) +
+  geom_text(size = 3) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", 
+                                "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "College Degree (%)",
+                     trans = "sqrt") +
+  geom_smooth(method = lm) +
+  theme_light()
+
+grid.arrange(MultiPovState.plot, MultiPovNoHS.plot, MultiNoHSColl.plot, MultiPovColl.plot)
+
+```
+
+These plots look at other variables besides race that I've determined influence high school graduation rates: poverty rate, % of adults without a high school degree, and % of adults with a college degree. When I look at this state-level data, it strikes me that there is no correlation between high school graduation rates and not having a high school degree, even though I saw a correlation when I looked at the individual census tract data.  There must be other contributing variables that get averaged out when I consider only state level data.
+
+### Summary Analysis
+
+In summary, the multi-variate analysis has revealed some interesting trends. When looking at the entire population, poverty rates and education level of adults in a community both effected high school graduation rates. There were some surpising trends:1) On average, Black students in majority Black communities graduate with at a lower rate, irrespective of the poverty rate of the community.  2) On average, Hispanic students in majority Hispanic communities graduate at a higher rate, irrespective of poverty rate. 3) There is a regional difference in the percent of Black students that graduate, with Black graduation rates being depressed in the Deep South, and correlated with poverty rate, at a state-level.
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, Plot_One}
+region =tolower(as.character(gradData.All$State_name))
+value = gradData$ALL_RATE_1112
+df.statemaps = data.frame(region, value)
+#head(df.maps)
+
+#multiple entries for each state, so I need to aggregate and take the mean
+
+State.plot <- state_choropleth(df.statemaps.sum,
+                 title = "Graduation Rates by State",
+                 legend = "Graduation Rates (%)",
+                 num_colors = 5)
+
+County.plot <- county_choropleth(df.maps.sum,
+                 title = "Graduation Rates by County",
+                 legend = "Graduation Rates (%)",
+                 num_colors = 5)
+
+grid.arrange(State.plot, County.plot)
+```
+
+#### Description One
+In the United States, high school graduation rates vary by state and geographic region. Graduation rates are lower in the South and Great Plains than they are in the NorthEast or Rust Belt. Within states there is also varibility at the county level. For examples, counties on the Gulf Coast in Texas have very high graduation rates, while counties on the New Mexico border have generally lower graduation rates. This local variation may be related to different population demographics within each county.  Note: areas shaded black on the plots indicate that there is no data for these regions in the dataset.
+
+### Plot Two
+```{r echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, Plot_Two}
+
+PlotTwo <- ggplot(data = gradData, aes(x = 100 - ALL_RATE_1112,
+                            y = pct_Prs_Blw_Pov_Lev_ACS_08_12)) +
+  geom_point(alpha = 0.1, position = position_jitter(width = 1.5, height = 1.5)) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60, 70, 80),
+                     labels = c("90", "80", "70", "60", "50", "40", "30", "20"),
+                     trans = "sqrt") +
+  scale_y_continuous(name = "Poverty Rate (%)",
+                     trans = "sqrt") +
+  geom_smooth(method = lm) +
+  theme_light() +
+  ggtitle("Poverty Rate vs. High School Graduation Rate")
+
+ggMarginal(PlotTwo, type = "histogram")
+
+```
+
+#### Description Two
+
+There is a negative correlation between high school graduation rate and the percent of people below the poverty level. (Correlation coefficient of -0.26: the best fit linear regression line is in blue.) This correlation suggests that implementing policies that decrease the poverty level in an area could also increase the high school graduation rate.  
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+
+ggplot(data = gradData.StateDemo, aes(x = 100 - GradRateMean, 
+                                      y = PopBlkMean, label = Abbreviation)) +
+  geom_point(alpha = 0.5, aes(colour = PovLevMean), size = 8) +
+  scale_size(range = c(1,10)) +
+  geom_text(size = 3) +
+  scale_color_gradient2(low = "green", mid = "yellow",
+     high = "red", midpoint = 20) +
+  scale_x_continuous(name = "High School Graduation Rate (%)",
+                     breaks = c(10, 20, 30, 40, 50, 60),
+                     labels = c("90", "80", "70", "60", "50", "40"),
+                     trans = "log2") +
+  scale_y_continuous(name = "Black Population (%)",
+                     trans = "sqrt") +
+  guides(colour = guide_legend("Poverty Rate (%)")) +
+  geom_vline(aes(xintercept = mean(100 - GradRateMean)), color = "blue") +
+  geom_hline(aes(yintercept = mean(PopBlkMean)), color = "black") +
+  ggtitle("Effect of Poverty and Race on Graduation Rates by State") +
+  theme_grey()
+
+```
+
+#### Description Three  
+This plot shows the relationship between high school graduation rate, the percent of the population that is Black, and the poverty rate averaged by state. Mean high school graduation rate is 80%, and indicated by a blue line on the plot. Mean percent of the population that is Black is 9.5%, and indicated by a black line on the plot. The mean poverty rate, averaged by state, is 15%, and colored light green in the plot legend.
+
+States in the deep South (AL, SC, MS, LA, GA, FL) have an average high school graduation rate lower than the mean. They also have a higher than average percent of the population that is Black, and a higher poverty rate than other states. The deep South is an area where the biggest regional impact on graduation rates can be made. Policies that increase integration of Black students into more affluent schools and decrease poverty rates overall may be beneficial in raising graduation rates in the South, and hence the overall graduation rate in the United States.
+
+
+------
+
+# Reflection
+
+The purpose of this EDA was to translate the Department of Education graduation data into actionable insights that would lead to higher graduation rates across the US. I think I partially succeeded in this goal.  I first looked at the Department of Education data and determined that schools that were successful in educating minorities and special populations of students had higher graduation rates of all students overall. I then focused my analysis on understanding the demographic variabiables in the data and how those variables effected graduation rates.  Did schools with higher graduation rates have different demographics than schools with lower graduation rates?  I concluded that there was no one strong demographic variable that could account for differences in graduation rates. Rather, it was a combination of poverty rate, percent of minority populations, primarily English speaking populations, and other unidentified factors that were likely to influence graduation rates.
+
+Since this EDA has not identified any single factor a major influencer of graduation rates, future work will focus on into the data more deeply using machine learning algorithms and possibly adding more data to the analysis.  The next step that will enrich this analysis is to perform a principle component analysis (PCA) on the variables I chose to work with. A PCA will allow me to identify the factors (variables) that most contribute to the variance in the dataset.  I can also perform this analysis on the entire dataset of 580 variables, perhaps achieving additional insights into the data.  After performing PCA, it would also be interesting to build a model of the data using machine learning algorithms to see if I could predict which demographic would result in higher graduation rates.
+
+This was a challenging dataset to work with for several reasons.  First, I had to narrow down the number of variables I looked at from 580 in the starting dataset. using intuition and based on research into graduation rates, I narrowed my focus down to 83 variables of interest.  Even then, I had to tidy the data, make new variables, and reshape some of the variables before using them inplotting and further analysis.  There were times that I felt like I was drowning in data, and I had to remain focused on the main goal of the project.  Even so, one of the main drawbacks of this analysis is that it is wide - I tried to look at many variables - instead of deep.  I further analysis of the data using machine learning willhelp to rectify this shortcoming.
+
+While I struggled through the analysis of the data, I also had some successes. I was able to determine which variables, in combination, explained some of the variance in graduation rates. I was suprised that race was in influencer of graduation rates, even when separated from underlying demographic variables. This suggests that there are cultural influences of graduation rates. It would be interesting to collaborate with a social scientist on this data analysis to see if additional insights could be gleaned about what these influences may be.
+
+Overall, this was a fun, challenging project to work on, and I look forward to delving more deeply into the data.
